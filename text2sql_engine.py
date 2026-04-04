@@ -1,8 +1,8 @@
 import sqlite3
 import pandas as pd
 from dotenv import load_dotenv
-import google.generativeai as genai
-import textwrap
+from google import genai
+from google.genai import types
 
 load_dotenv()
 
@@ -10,11 +10,9 @@ class Text2SQLEngine:
     def __init__(self, api_key=None, conn=None, db_path="hr_database.db"):
         self.api_key = api_key
         self.conn = conn
-        
-        # ✅ Add this — create the actual client
+
         if api_key:
-            genai.configure(api_key=api_key)
-            self.client = genai.GenerativeModel("gemini-1.5-flash")
+            self.client = genai.Client(api_key=api_key)
         else:
             self.client = None
 
@@ -175,8 +173,6 @@ def get_schema_for_prompt(conn):
     return "\n".join(schema_parts)
 
 def generate_sql(question, client, schema_info):
-    """Use Gemini to generate SQL from natural language"""
-    
     if client is None:
         return "SELECT * FROM employees LIMIT 10"
 
@@ -189,7 +185,6 @@ RULES:
 - Return ONLY the raw SQL query, no explanations, no markdown, no code fences
 - Use only tables and columns that exist in the schema above
 - Use proper SQLite syntax
-- Always use double quotes around table and column names that might conflict with reserved words
 - Limit results to 50 rows unless the question asks for all data
 
 USER QUESTION: {question}
@@ -197,12 +192,51 @@ USER QUESTION: {question}
 SQL QUERY:"""
 
     try:
-        response = client.generate_content(prompt)
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",  # ✅ current model
+            contents=prompt
+        )
         sql = response.text.strip()
-        
-        # Strip markdown code fences if Gemini adds them anyway
         sql = sql.replace("```sql", "").replace("```", "").strip()
-        
         return sql
     except Exception as e:
         return f"-- Error generating SQL: {e}\nSELECT * FROM employees LIMIT 10"
+
+
+def generate_visualization_code(question, sql, df, client=None):
+    if df is None or df.empty or len(df.columns) < 2 or client is None:
+        return None
+
+    numeric_cols = df.select_dtypes(include="number").columns.tolist()
+    if not numeric_cols:
+        return None
+
+    prompt = f"""You are a Python data visualization expert using matplotlib.
+
+        Given this dataframe `df` with columns: {list(df.columns)}
+        Sample data:
+        {df.head(3).to_string()}
+
+        The user asked: "{question}"
+        The SQL used was: {sql}
+
+        Write Python code to create the most appropriate matplotlib visualization.
+        RULES:
+        - Use ONLY matplotlib (already imported as plt)
+        - The dataframe is already available as `df`
+        - Store the figure in a variable called `fig`
+        - No explanations, no markdown, no code fences
+        - No import statements needed
+
+        CODE:"""
+
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=prompt
+        )
+        code = response.text.strip()
+        code = code.replace("```python", "").replace("```", "").strip()
+        return code
+    except Exception as e:
+        return None
