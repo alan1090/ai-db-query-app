@@ -1,0 +1,36 @@
+# Environment variables
+.env
+.env.*
+!.env.example
+*.env
+*.env.local
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+venv/
+env/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Data files
+*.csv
+*.xlsx
+*.db
+*.sqlite
+
+# Streamlit
+.streamlit/secrets.toml
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

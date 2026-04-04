@@ -1,0 +1,95 @@
+erDiagram
+    departments ||--o{ employees : "has"
+    departments ||--o{ projects : "owns"
+    departments ||--o{ job_titles : "defines"
+    job_titles ||--o{ employees : "held by"
+    employees ||--o{ salary_history : "has"
+    employees ||--o{ performance_reviews : "receives"
+    employees ||--o{ training_records : "takes"
+    employees ||--o{ project_assignments : "assigned to"
+    projects ||--o{ project_assignments : "includes"
+    employees ||--o{ employees : "manages"
+
+    departments {
+        int dept_id PK
+        text dept_name
+        text location
+        int annual_budget
+        text division
+        text established_date
+    }
+
+    job_titles {
+        int title_id PK
+        text title
+        int dept_id FK
+        text level
+        int min_salary
+        int max_salary
+    }
+
+    employees {
+        int emp_id PK
+        text first_name
+        text last_name
+        text email
+        int dept_id FK
+        int title_id FK
+        int salary
+        text hire_date
+        text gender
+        text employment_status
+        text termination_date
+        text work_mode
+        int manager_id FK
+    }
+
+    salary_history {
+        int history_id PK
+        int emp_id FK
+        int old_salary
+        int new_salary
+        text effective_date
+        text reason
+    }
+
+    projects {
+        int project_id PK
+        text project_name
+        int dept_id FK
+        int budget
+        text start_date
+        text end_date
+        text status
+        text priority
+    }
+
+    project_assignments {
+        int assignment_id PK
+        int project_id FK
+        int emp_id FK
+        text role
+        int hours_per_week
+    }
+
+    performance_reviews {
+        int review_id PK
+        int emp_id FK
+        int review_year
+        int rating
+        int goals_met_pct
+        text reviewer_comments
+        text review_date
+    }
+
+    training_records {
+        int record_id PK
+        int emp_id FK
+        text course_name
+        text category
+        int hours
+        text enrollment_date
+        text completion_date
+        text status
+        int score
+    }
