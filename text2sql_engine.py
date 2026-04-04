@@ -7,10 +7,12 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class Text2SQLEngine:
-    def __init__(self, db_path="hr_database.db"):
-        self.db_path = db_path
-        self.conn = None
-        self.connect()
+    def __init__(self, api_key=None, conn=None, db_path="hr_database.db"):
+        self.api_key = api_key
+        self.conn = conn  # use existing connection if passed
+        if self.conn is None:
+            self.db_path = db_path
+            self.connect()
     
     def connect(self):
         """Create database connection"""
@@ -98,15 +100,66 @@ class Text2SQLEngine:
     def close(self):
         if self.conn:
             self.conn.close()
+def execute_generated_sql(sql, conn):
+    """Execute SQL query and return (success, DataFrame)"""
+    try:
+        df = pd.read_sql_query(sql, conn)
+        return True, df
+    except Exception as e:
+        return False, pd.DataFrame({"Error": [str(e)]})
 
-def get_schema_for_prompt():
-    engine = Text2SQLEngine()
-    schema = engine.get_schema()
-    engine.close()
-    return schema
 
-def generate_sql(question, schema_info):
+def generate_visualization_code(question, sql, df, client=None):
+    """
+    Generate matplotlib visualization code based on the query results.
+    Returns a string of Python code that creates a fig variable.
+    """
+    if df is None or df.empty or len(df.columns) < 2:
+        return None
+
+    # Pick the first numeric column as the value axis
+    numeric_cols = df.select_dtypes(include="number").columns.tolist()
+    text_cols = df.select_dtypes(exclude="number").columns.tolist()
+
+    if not numeric_cols:
+        return None
+
+    x_col = text_cols[0] if text_cols else df.columns[0]
+    y_col = numeric_cols[0]
+
+    code = f"""
+            import matplotlib.pyplot as plt
+
+            fig, ax = plt.subplots(figsize=(10, 5))
+            ax.bar(df['{x_col}'].astype(str), df['{y_col}'])
+            ax.set_xlabel('{x_col}')
+            ax.set_ylabel('{y_col}')
+            ax.set_title('{question[:60]}')
+            plt.xticks(rotation=45, ha='right')
+            plt.tight_layout()
+        """
+    return code
+
+def get_schema_for_prompt(conn):
+    """Get schema string from an existing connection"""
+    cursor = conn.cursor()
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';")
+    tables = cursor.fetchall()
+
+    schema_parts = []
+    for (table_name,) in tables:
+        cursor.execute(f'PRAGMA table_info("{table_name}")')
+        columns = cursor.fetchall()
+        schema_parts.append(f"\n-- Table: {table_name}")
+        for col in columns:
+            schema_parts.append(f"  {col[1]} ({col[2]})")
+        cursor.execute(f'SELECT COUNT(*) FROM "{table_name}"')
+        count = cursor.fetchone()[0]
+        schema_parts.append(f"  -- Total rows: {count}\n")
+
+    return "\n".join(schema_parts)
+
+def generate_sql(question, client, schema_info):
     engine = Text2SQLEngine()
     sql = engine.generate_sql(question, schema_info)
-    engine.close()
     return sql
