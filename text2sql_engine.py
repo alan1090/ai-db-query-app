@@ -14,7 +14,7 @@ class Text2SQLEngine:
         # ✅ Add this — create the actual client
         if api_key:
             genai.configure(api_key=api_key)
-            self.client = genai.GenerativeModel("gemini-pro")
+            self.client = genai.GenerativeModel("gemini-1.5-flash")
         else:
             self.client = None
 
@@ -118,32 +118,43 @@ def execute_generated_sql(sql, conn):
 
 
 def generate_visualization_code(question, sql, df, client=None):
-    if df is None or df.empty or len(df.columns) < 2:
+    """Use Gemini to generate appropriate matplotlib visualization code"""
+
+    if df is None or df.empty or len(df.columns) < 2 or client is None:
         return None
 
     numeric_cols = df.select_dtypes(include="number").columns.tolist()
-    text_cols = df.select_dtypes(exclude="number").columns.tolist()
-
     if not numeric_cols:
         return None
 
-    x_col = text_cols[0] if text_cols else df.columns[0]
-    y_col = numeric_cols[0]
+    prompt = f"""You are a Python data visualization expert using matplotlib.
 
-    code = textwrap.dedent(f"""
-        import matplotlib.pyplot as plt
+Given this dataframe `df` with columns: {list(df.columns)}
+Sample data:
+{df.head(3).to_string()}
 
-        fig, ax = plt.subplots(figsize=(10, 5))
-        ax.bar(df['{x_col}'].astype(str), df['{y_col}'])
-        ax.set_xlabel('{x_col}')
-        ax.set_ylabel('{y_col}')
-        ax.set_title('{question[:60]}')
-        plt.xticks(rotation=45, ha='right')
-        plt.tight_layout()
-        """).strip() 
+The user asked: "{question}"
+The SQL used was: {sql}
 
-    return code
+Write Python code to create the most appropriate matplotlib visualization.
+RULES:
+- Use ONLY matplotlib (already imported as plt)
+- The dataframe is already available as `df`
+- Store the figure in a variable called `fig`
+- No explanations, no markdown, no code fences
+- No import statements needed
+- Keep it simple and readable
 
+CODE:"""
+
+    try:
+        response = client.generate_content(prompt)
+        code = response.text.strip()
+        code = code.replace("```python", "").replace("```", "").strip()
+        return code
+    except Exception as e:
+        return None
+    
 def get_schema_for_prompt(conn):
     """Get schema string from an existing connection"""
     cursor = conn.cursor()
@@ -164,6 +175,34 @@ def get_schema_for_prompt(conn):
     return "\n".join(schema_parts)
 
 def generate_sql(question, client, schema_info):
-    engine = Text2SQLEngine()
-    sql = engine.generate_sql(question, schema_info)
-    return sql
+    """Use Gemini to generate SQL from natural language"""
+    
+    if client is None:
+        return "SELECT * FROM employees LIMIT 10"
+
+    prompt = f"""You are an expert SQL assistant. Given the following database schema, write a valid SQLite SQL query to answer the user's question.
+
+DATABASE SCHEMA:
+{schema_info}
+
+RULES:
+- Return ONLY the raw SQL query, no explanations, no markdown, no code fences
+- Use only tables and columns that exist in the schema above
+- Use proper SQLite syntax
+- Always use double quotes around table and column names that might conflict with reserved words
+- Limit results to 50 rows unless the question asks for all data
+
+USER QUESTION: {question}
+
+SQL QUERY:"""
+
+    try:
+        response = client.generate_content(prompt)
+        sql = response.text.strip()
+        
+        # Strip markdown code fences if Gemini adds them anyway
+        sql = sql.replace("```sql", "").replace("```", "").strip()
+        
+        return sql
+    except Exception as e:
+        return f"-- Error generating SQL: {e}\nSELECT * FROM employees LIMIT 10"
