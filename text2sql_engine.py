@@ -193,7 +193,7 @@ SQL QUERY:"""
 
     try:
         response = client.models.generate_content(
-            model="gemini-2.0-flash",  # ✅ current model
+            model="gemini-3-flash-preview",
             contents=prompt
         )
         sql = response.text.strip()
@@ -232,7 +232,7 @@ def generate_visualization_code(question, sql, df, client=None):
 
     try:
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-3-flash-preview",
             contents=prompt
         )
         code = response.text.strip()
