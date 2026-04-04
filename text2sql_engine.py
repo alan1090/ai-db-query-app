@@ -1,15 +1,23 @@
-import os
 import sqlite3
 import pandas as pd
-import re
 from dotenv import load_dotenv
+import google.generativeai as genai
+
 
 load_dotenv()
 
 class Text2SQLEngine:
     def __init__(self, api_key=None, conn=None, db_path="hr_database.db"):
         self.api_key = api_key
-        self.conn = conn  # use existing connection if passed
+        self.conn = conn
+        
+        # ✅ Add this — create the actual client
+        if api_key:
+            genai.configure(api_key=api_key)
+            self.client = genai.GenerativeModel("gemini-pro")
+        else:
+            self.client = None
+
         if self.conn is None:
             self.db_path = db_path
             self.connect()
