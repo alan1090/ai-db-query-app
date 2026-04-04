@@ -126,7 +126,7 @@ with st.sidebar:
                             )
                             display_df = schema_df[["name", "type"]].copy()
                             display_df["PK"] = schema_df["pk"].apply(lambda x: "✓" if x else "")
-                            st.dataframe(display_df, use_container_width=True)
+                            st.dataframe(display_df, width='stretch')
                     except Exception as e:
                         st.error(f"Error getting schema: {e}")
 
@@ -159,10 +159,10 @@ for msg in st.session_state.messages:
             st.code(msg["sql"], language="sql")
 
         if "data" in msg and msg["data"] is not None and not msg["data"].empty:
-            st.dataframe(msg["data"], use_container_width=True)
+            st.dataframe(msg["data"], width='stretch')
 
         if "visualization" in msg and msg["visualization"]:
-            local_vars = {"df": msg["data"]}
+            local_vars = {"df": msg["data"], "plt": plt}
             try:
                 exec(msg["visualization"], local_vars)
                 fig = local_vars.get("fig")
@@ -209,9 +209,9 @@ if user_input and api_key:
     st.code(sql_query, language="sql")
 
     if success and query_results is not None and not query_results.empty:
-        st.dataframe(query_results, use_container_width=True)
+        st.dataframe(query_results, width='stretch')
         if visualization_code:
-            local_vars = {"df": query_results}
+            local_vars = {"df": query_results, "plt": plt}
             try:
                 exec(visualization_code, local_vars)
                 fig = local_vars.get("fig")
