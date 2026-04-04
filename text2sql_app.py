@@ -78,7 +78,7 @@ with st.sidebar:
                                                     columns=["cid", "name", "type", "notnull", "dflt_value", "pk"])
                             display_df = schema_df[["name", "type"]].copy()
                             display_df["PK"] = schema_df["pk"].apply(lambda x: "✓" if x else "")
-                            st.dataframe(display_df, use_container_width=True)
+                            st.dataframe(display_df, width='stretch')
                     except Exception as e:
                         st.error(f"Error getting schema: {e}")
                         
@@ -124,6 +124,7 @@ if user_input and api_key:
 
     success, query_results = execute_generated_sql(sql_query, conn)
 
+    visualization_code = None  # ✅ always initialize it
     if success:
         visualization_code = generate_visualization_code(
             user_input,
@@ -141,6 +142,7 @@ if user_input and api_key:
     }
 
     st.session_state.messages.append(assistant_response)
+    st.rerun()  # ✅ force UI refresh
 
 
 # ============================================================
