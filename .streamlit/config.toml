@@ -1,0 +1,9 @@
+[server]
+maxUploadSize = 10
+
+[theme]
+base = "dark"
+
+# Python version specification
+[runtime]
+python_version = "3.11"
