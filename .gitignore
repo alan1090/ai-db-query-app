@@ -20,7 +20,6 @@ env/
 *.swp
 
 # Data files
-*.csv
 *.xlsx
 *.db
 *.sqlite

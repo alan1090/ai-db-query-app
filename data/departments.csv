@@ -1,0 +1,9 @@
+dept_id,dept_name,location,annual_budget,division,established_date
+1,Engineering,San Francisco,3200000,Technology,2015-01-15
+2,Marketing,New York,1400000,Growth,2015-01-15
+3,Sales,Chicago,2100000,Revenue,2015-01-15
+4,Human Resources,San Francisco,900000,Operations,2015-03-01
+5,Finance,New York,1100000,Operations,2015-01-15
+6,Customer Support,Austin,850000,Operations,2016-06-01
+7,Product,San Francisco,1800000,Technology,2017-01-10
+8,Data Science,San Francisco,1500000,Technology,2019-04-01
