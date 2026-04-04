@@ -7,7 +7,6 @@ import sys
 
 load_dotenv()
 
-# Make sure we can import from the current directory
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(__file__))
 
