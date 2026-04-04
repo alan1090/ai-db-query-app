@@ -2,7 +2,7 @@ import sqlite3
 import pandas as pd
 from dotenv import load_dotenv
 import google.generativeai as genai
-
+import textwrap
 
 load_dotenv()
 
@@ -118,14 +118,9 @@ def execute_generated_sql(sql, conn):
 
 
 def generate_visualization_code(question, sql, df, client=None):
-    """
-    Generate matplotlib visualization code based on the query results.
-    Returns a string of Python code that creates a fig variable.
-    """
     if df is None or df.empty or len(df.columns) < 2:
         return None
 
-    # Pick the first numeric column as the value axis
     numeric_cols = df.select_dtypes(include="number").columns.tolist()
     text_cols = df.select_dtypes(exclude="number").columns.tolist()
 
@@ -135,17 +130,18 @@ def generate_visualization_code(question, sql, df, client=None):
     x_col = text_cols[0] if text_cols else df.columns[0]
     y_col = numeric_cols[0]
 
-    code = f"""
-            import matplotlib.pyplot as plt
+    code = textwrap.dedent(f"""
+        import matplotlib.pyplot as plt
 
-            fig, ax = plt.subplots(figsize=(10, 5))
-            ax.bar(df['{x_col}'].astype(str), df['{y_col}'])
-            ax.set_xlabel('{x_col}')
-            ax.set_ylabel('{y_col}')
-            ax.set_title('{question[:60]}')
-            plt.xticks(rotation=45, ha='right')
-            plt.tight_layout()
-        """
+        fig, ax = plt.subplots(figsize=(10, 5))
+        ax.bar(df['{x_col}'].astype(str), df['{y_col}'])
+        ax.set_xlabel('{x_col}')
+        ax.set_ylabel('{y_col}')
+        ax.set_title('{question[:60]}')
+        plt.xticks(rotation=45, ha='right')
+        plt.tight_layout()
+        """).strip() 
+
     return code
 
 def get_schema_for_prompt(conn):
