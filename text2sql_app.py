@@ -124,7 +124,7 @@ if user_input and api_key:
 
     success, query_results = execute_generated_sql(sql_query, conn)
 
-    visualization_code = None  # ✅ always initialize it
+    visualization_code = None
     if success:
         visualization_code = generate_visualization_code(
             user_input,
@@ -142,7 +142,8 @@ if user_input and api_key:
     }
 
     st.session_state.messages.append(assistant_response)
-    st.rerun()  # ✅ force UI refresh
+    st.session_state["user_input"] = ""  # clear input
+    st.rerun()
 
 
 # ============================================================
