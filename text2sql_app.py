@@ -24,25 +24,22 @@ from text2sql_engine import (
 # PAGE CONFIGURATION
 # ============================================================
 st.set_page_config(
-    page_title="TechCorp HR Analytics",
-    page_icon="🏢",
+    page_title="AI Text2SQL",
+    page_icon="🤖",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
 # ============================================================
-# CUSTOM CSS — chat bubbles, constrained width
+# CUSTOM CSS
 # ============================================================
 st.markdown("""
 <style>
-    /* Constrain main content width */
     .main .block-container {
         max-width: 860px;
         margin: 0 auto;
         padding-top: 2rem;
     }
-
-    /* User bubble — right aligned */
     .user-bubble {
         display: flex;
         justify-content: flex-end;
@@ -57,8 +54,6 @@ st.markdown("""
         font-size: 0.95rem;
         line-height: 1.4;
     }
-
-    /* AI bubble — left aligned */
     .ai-bubble {
         display: flex;
         justify-content: flex-start;
@@ -73,8 +68,6 @@ st.markdown("""
         font-size: 0.95rem;
         line-height: 1.4;
     }
-
-    /* Avatar labels */
     .avatar {
         font-size: 0.75rem;
         color: #888;
@@ -87,27 +80,82 @@ st.markdown("""
 
 api_key = os.getenv("GOOGLE_API_KEY")
 
-st.title("🏢 TechCorp HR Analytics")
+st.title("🤖 AI Text2SQL")
 st.caption("Ask questions about your company data in plain English")
 
 # ============================================================
-# SIDEBAR: Configuration & Schema Explorer
+# ENSURE UPLOAD FOLDER EXISTS AND IS EMPTY ON FIRST LOAD
+# ============================================================
+data_path = os.path.join(SCRIPT_DIR, "data")
+os.makedirs(data_path, exist_ok=True)
+
+# ============================================================
+# SIDEBAR
 # ============================================================
 with st.sidebar:
-    data_path = os.path.join(SCRIPT_DIR, "data")
-    conn = load_csv_to_db(data_path)
 
-    st.header("📋 Database Schema")
-    st.caption("Reference these tables when asking questions")
+    # --- CSV Upload ---
+    st.header("📂 Upload Data")
+    uploaded_files = st.file_uploader(
+        "Upload CSV files",
+        type=["csv"],
+        accept_multiple_files=True,
+        help="Upload one or more CSV files to query"
+    )
 
-    try:
-        tables_query = "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';"
-        tables_result = conn.execute(tables_query).fetchall()
-        tables = [t[0] for t in tables_result]
+    if uploaded_files:
+        # Clear old files first so stale tables don't linger
+        for old_file in os.listdir(data_path):
+            if old_file.endswith(".csv"):
+                os.remove(os.path.join(data_path, old_file))
 
-        if not tables:
-            st.info("No tables found. Please check if CSV files were loaded correctly.")
-        else:
+        # Save new uploads
+        for uploaded_file in uploaded_files:
+            save_path = os.path.join(data_path, uploaded_file.name)
+            with open(save_path, "wb") as f:
+                f.write(uploaded_file.getbuffer())
+
+        # Reset engine + chat when new files arrive
+        if "last_uploaded" not in st.session_state or \
+                st.session_state.last_uploaded != [f.name for f in uploaded_files]:
+            st.session_state.last_uploaded = [f.name for f in uploaded_files]
+            if "engine" in st.session_state:
+                del st.session_state["engine"]
+            st.session_state.messages = []
+            st.rerun()
+
+    # --- Load DB ---
+    csv_files = [f for f in os.listdir(data_path) if f.endswith(".csv")]
+
+    if not csv_files:
+        st.info("Upload CSV files above to get started.")
+        conn = None
+    else:
+        conn = load_csv_to_db(data_path)
+        st.success(f"✅ {len(csv_files)} file(s) loaded")
+
+        # --- File list with delete buttons ---
+        st.markdown("**Loaded files:**")
+        for fname in csv_files:
+            col1, col2 = st.columns([4, 1])
+            col1.caption(fname)
+            if col2.button("🗑", key=f"del_{fname}"):
+                os.remove(os.path.join(data_path, fname))
+                if "engine" in st.session_state:
+                    del st.session_state["engine"]
+                st.session_state.messages = []
+                st.rerun()
+
+        # --- Schema Explorer ---
+        st.divider()
+        st.header("📋 Database Schema")
+        st.caption("Reference these tables when asking questions")
+
+        try:
+            tables_query = "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';"
+            tables_result = conn.execute(tables_query).fetchall()
+            tables = [t[0] for t in tables_result]
+
             for table_name in tables:
                 with st.expander(f"📊 {table_name}"):
                     try:
@@ -115,7 +163,6 @@ with st.sidebar:
                         st.metric("Row Count", f"{row_count:,}")
                     except Exception as e:
                         st.error(f"Error counting rows: {e}")
-
                     try:
                         schema_info = conn.execute(f'PRAGMA table_info("{table_name}")').fetchall()
                         if schema_info:
@@ -126,21 +173,28 @@ with st.sidebar:
                             )
                             display_df = schema_df[["name", "type"]].copy()
                             display_df["PK"] = schema_df["pk"].apply(lambda x: "✓" if x else "")
-                            st.dataframe(display_df, width='stretch')
+                            st.dataframe(display_df, use_container_width=True)
                     except Exception as e:
                         st.error(f"Error getting schema: {e}")
+        except Exception as e:
+            st.error(f"Error loading tables: {e}")
 
-    except Exception as e:
-        st.error(f"Error loading tables: {e}")
-
+    # --- Session state init ---
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
-    if api_key and "engine" not in st.session_state:
+    if conn is not None and api_key and "engine" not in st.session_state:
         st.session_state.engine = Text2SQLEngine(api_key=api_key, conn=conn)
 
 # ============================================================
-# CHAT HISTORY DISPLAY
+# MAIN AREA — no CSV uploaded yet
+# ============================================================
+if not csv_files:
+    st.info("👈 Upload one or more CSV files in the sidebar to get started.")
+    st.stop()
+
+# ============================================================
+# CHAT HISTORY
 # ============================================================
 for msg in st.session_state.messages:
     if msg["role"] == "user":
@@ -159,7 +213,9 @@ for msg in st.session_state.messages:
             st.code(msg["sql"], language="sql")
 
         if "data" in msg and msg["data"] is not None and not msg["data"].empty:
-            st.dataframe(msg["data"], width='stretch')
+            col, _ = st.columns([2, 1])  # takes up 2/3 of the width
+            with col:
+                st.dataframe(msg["data"], use_container_width=True, height=200)
 
         if "visualization" in msg and msg["visualization"]:
             local_vars = {"df": msg["data"], "plt": plt}
@@ -167,21 +223,22 @@ for msg in st.session_state.messages:
                 exec(msg["visualization"], local_vars)
                 fig = local_vars.get("fig")
                 if fig:
-                    st.pyplot(fig)
+                    fig.set_size_inches(5, 3)  # shrink the chart
+                    col, _ = st.columns([2, 1])  # same constrained width
+                    with col:
+                        st.pyplot(fig)
                 else:
                     st.warning("No figure generated.")
             except Exception as e:
                 st.error(f"Visualization error: {e}")
 
         st.markdown("<hr style='margin: 4px 0; border: none; border-top: 1px solid #eee;'>", unsafe_allow_html=True)
-
 # ============================================================
 # CHAT INPUT
 # ============================================================
 user_input = st.chat_input("Ask a question about the data...")
 
-if user_input and api_key:
-    # Show user bubble immediately
+if user_input and api_key and conn is not None:
     st.markdown(f"""
     <div class="avatar avatar-right">You</div>
     <div class="user-bubble"><div class="bubble">{user_input}</div></div>
@@ -189,7 +246,6 @@ if user_input and api_key:
 
     st.session_state.messages.append({"role": "user", "content": user_input})
 
-    # Process and show AI response
     with st.spinner("Thinking..."):
         engine = st.session_state.engine
         sql_query = generate_sql(user_input, engine.client, get_schema_for_prompt(conn))
@@ -209,7 +265,7 @@ if user_input and api_key:
     st.code(sql_query, language="sql")
 
     if success and query_results is not None and not query_results.empty:
-        st.dataframe(query_results, width='stretch')
+        st.dataframe(query_results, use_container_width=True)
         if visualization_code:
             local_vars = {"df": query_results, "plt": plt}
             try:
@@ -232,23 +288,3 @@ if user_input and api_key:
 
 elif user_input and not api_key:
     st.error("⚠️ No API key found. Please set GOOGLE_API_KEY in your environment.")
-
-
-# ============================================================
-# OPTIONAL EXTENSIONS (for additional practice)
-# ============================================================
-
-# OPTIONAL TODO A: Add a "Show SQL History" sidebar section
-# Display previously executed queries in the sidebar.
-
-# OPTIONAL TODO B: Add a "Custom SQL" tab
-# Let users type and execute their own SQL queries with validation.
-
-# OPTIONAL TODO C: Add conversation memory
-# Include previous Q&A pairs in the prompt for contextual follow-up questions.
-
-# OPTIONAL TODO D: Add a data export button
-# Let users download query results as CSV.
-
-# OPTIONAL TODO E: Add a "Suggested Questions" section
-# Show clickable starter questions to help users get started.
